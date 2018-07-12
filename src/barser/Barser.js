@@ -142,6 +142,19 @@ define([], () => {
         }
     );
 
+    const lazy = (parserFn) => new Parser('Lazy',
+      (str, pos) => {
+          const parser = parserFn();
+          return parser.fn(str, pos);
+      }
+    );
+
+    const end = new Parser('$(End)',
+        (str, pos) => (pos === str.length
+            ? success('', pos, pos)
+            : failure(`Expected end of input`, pos))
+    );
+
     // Convenience methods
     Parser.prototype.many = function() {
         return many(this);
@@ -186,6 +199,8 @@ define([], () => {
         or,
         slice,
         map,
+        lazy,
+        end,
 
         // Execution methods
         parse,

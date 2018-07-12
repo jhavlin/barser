@@ -108,5 +108,29 @@ define([
         it('defines version', () => {
             expect(B.version).toBe('0.0.1');
         });
+
+        it('can match recursive structure', () => {
+            const lang = {};
+            lang.simple = B.lazy(() =>
+                B.str('a')
+            );
+            lang.pair = B.lazy(() =>
+                B.seq(B.str('('), lang.expr, B.str(','), lang.expr, B.str(')'))
+            );
+            lang.expr = B.lazy(() => 
+                B.or(lang.simple, lang.pair)
+            );
+            lang.main = B.seq(lang.expr, B.end)
+
+            expect(B.parse(lang.main, 'a').ok).toBe(true);
+            expect(B.parse(lang.main, '(a,a)').ok).toBe(true);
+            expect(B.parse(lang.main, '((a,a),(a,a))').ok).toBe(true);
+            expect(B.parse(lang.main, '(a,(a,((a,a),a)))').ok).toBe(true);
+
+            expect(B.parse(lang.main, 'b').ok).toBe(false);
+            expect(B.parse(lang.main, '()').ok).toBe(false);
+            expect(B.parse(lang.main, '(a,(a)').ok).toBe(false); // missing right paren
+            expect(B.parse(lang.main, '(a,(a,a)))').ok).toBe(false); // extra right paren
+        });
     });
 });
