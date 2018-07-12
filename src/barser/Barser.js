@@ -12,8 +12,6 @@ define([], () => {
         }
     }
 
-    const slice = (str, start, end) => new Slice(str, start, end);
-
     class Result {
         constructor(ok) {
             this.ok = ok;
@@ -38,8 +36,6 @@ define([], () => {
 
     const success = (value, start, end) => new SuccessResult(value, start, end);
 
-    const successWithSlice = (str, start, end) => new SuccessResult(slice(str, start, end), start, end);
-
     class FailureResult extends Result {
         constructor(failMsg, pos) {
             super(false);
@@ -60,6 +56,20 @@ define([], () => {
             ? success(s, pos, pos + s.length)
             : failure(`Expected: ${s}`, pos))
     );
+
+    const reg = (regexp) => {
+        const r = RegExp(regexp, 'y');
+        return new Parser(regexp + '',
+            (str, pos) => {
+                r.lastIndex = pos;
+                const res = r.exec(str);
+                if (res) {
+                    return success(res[0], pos, pos + res[0].length);
+                }
+                return failure(`Expected regexp: ${regexp}`, pos);
+            }
+        );
+    };
 
     const many = (parser) => new Parser(parser.name + '*',
         (str, pos) => {
@@ -96,11 +106,62 @@ define([], () => {
         }
     )
 
-    const or = (...parsers) => (
-        (str, pos) => {
+    const or = (...parsers) => {
+        const name = parsers.map(p => p.name).join('|');
+        return new Parser(name,
+            (str, pos) => {
+                for (let i = 0; i < parsers.length; i++) {
+                    const parser = parsers[i];
+                    const res = parser.fn(str, pos);
+                    if (res.ok) {
+                        return res;
+                    }
+                }
+                return failure(`Expected: ${name}`, pos);
+            }
+        );
+    }
 
+    const slice = (parser) => new Parser(parser.name,
+        (str, pos) => {
+            const res = parser.fn(str, pos);
+            if (res.ok) {
+                return success({ value: res.value, slice: new Slice(str, res.start, res.end) }, res.star, res.end);
+            }
+            return res;
         }
-    )
+    );
+
+    const map = (parser, fn) => new Parser(parser.name,
+        (str, pos) => {
+            const res = parser.fn(str, pos);
+            if (res.ok) {
+                return success(fn(res.value), res.start, res.end);
+            }
+            return res;
+        }
+    );
+
+    // Convenience methods
+    Parser.prototype.many = function() {
+        return many(this);
+    }
+
+    Parser.prototype.or = function(...parsers) {
+        return or(this, ...parsers);
+    }
+
+    Parser.prototype.seq = function(...parsers) {
+        return seq(this, ...parsers);
+    }
+
+    Parser.prototype.slice = function() {
+        return slice(this);
+    }
+
+    Parser.prototype.map = function(fn) {
+        return map(this, fn);
+    }
 
     // Execution
     // ------------------------------------------------------
@@ -115,13 +176,16 @@ define([], () => {
         Slice,
 
         // helpers
-        slice,
 
         // Basic parsers
         successful,
         str,
+        reg,
         many,
         seq,
+        or,
+        slice,
+        map,
 
         // Execution methods
         parse,
